@@ -32,11 +32,13 @@ const SYSTEM_MESSAGE = {
 - Город строительства — обязательный параметр. Если он не указан, обязательно спроси отдельным вопросом: в каком городе планируется строительство и поясни, что это важно для логистики и условий.
 - Как только всех параметров достаточно для расчёта, немедленно вызывай функцию calculate_sip_house_cost и больше вопросов не задавай, пока пользователь сам не захочет изменить параметры.
 
-ЧИСЛА И РАСЧЁТЫ (КЛЮЧЕВОЕ ПРАВИЛО):
-- Все цены, суммы, проценты и другие числовые значения ты обязан брать ТОЛЬКО из результата функции calculate_sip_house_cost (SipCalcResult), который возвращает наш калькулятор или соответствующего tool result.
-- Никогда НЕ придумывай числа сам, НЕ оценивай «примерно», НЕ округляй и НЕ изменяй значения из SipCalcResult.
-- Если в контексте есть объект результата расчёта (tool result или JSON с полями total, foundation, houseKit, assembly, deliveryCost, pricePerM2), просто используй эти числа как есть.
-- Пиши по-русски, а цифры форматируй с пробелами: 8 426 300 ₸.`
+ЧИСЛА И РАСЧЁТЫ (КРИТИЧЕСКИ ВАЖНО - ИСПОЛНЯЙ СТРОГО):
+- ВСЕ цифры (стоимость фундамента, домокомплекта, сборки, доставки, итоговая цена, цена за м²) ты ОБЯЗАН использовать СТРОГО из переданного объекта результата (tool result).
+- НЕЛЬЗЯ ничего пересчитывать, изменять, округлять, делить или умножать.
+- НЕЛЬЗЯ придумывать числа сам, НЕЛЬЗЯ оценивать «примерно».
+- Просто красиво оформи эти значения в текст для клиента.
+- Форматируй цифры с пробелами: 8 426 300 ₸ (но сами числа бери из результата как есть, без изменений).
+- Если в tool result есть JSON с полями total, foundation, houseKit, assembly, deliveryCost, pricePerM2 — используй эти числа ТОЧНО как есть, без малейших изменений.`
 };
 
 /**
@@ -131,8 +133,28 @@ router.post('/ai/calculator-chat', async (req, res) => {
       try {
         const args = JSON.parse(toolCall.function.arguments);
         
+        // Нормализуем параметры для обычного режима (дефолтные значения)
+        const normalizedArgs = {
+          ...args,
+          // Если не указаны, используем дефолты как в обычном режиме формы
+          firstFloorType: args.firstFloorType || 'Полноценный',
+          firstFloorHeight: args.firstFloorHeight || 2.5,
+          secondFloorHeight: args.secondFloorHeight || (args.floors >= 2 ? 2.5 : undefined),
+          thirdFloorHeight: args.thirdFloorHeight || (args.floors === 3 ? 2.5 : undefined),
+          firstFloorThickness: args.firstFloorThickness || 163,
+          secondFloorThickness: args.secondFloorThickness || (args.floors >= 2 ? 163 : undefined),
+          thirdFloorThickness: args.thirdFloorThickness || (args.floors === 3 ? 163 : undefined),
+          partitionType: args.partitionType || 'Профиль + гипсокартон + мин. вата, толщина 100 мм',
+          ceiling: args.ceiling || 'Потолок утеплённый (пенополистирол 145 мм)',
+          houseShape: args.houseShape || 'Простая форма',
+          additionalWorks: args.additionalWorks || 'Без дополнительных работ',
+          hasVat: args.hasVat || false,
+          hasInstallment: args.hasInstallment || false,
+          installmentAmount: args.installmentAmount || 0
+        };
+        
         // Вызываем функцию расчёта
-        const result = calculateSipCost(args);
+        const result = calculateSipCost(normalizedArgs);
 
         // Второй запрос к OpenAI: отдать результат функции и получить красивый ответ для пользователя
         const followupResponse = await client.chat.completions.create({

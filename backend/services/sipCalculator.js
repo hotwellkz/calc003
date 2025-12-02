@@ -164,6 +164,9 @@ function normalizeFloors(floors) {
 export function calculateSipCost(params) {
   const { area } = params;
   
+  // Логирование для отладки
+  console.log('[AI_CALC_INPUT]', JSON.stringify(params, null, 2));
+  
   // Проверка ограничений площади
   if (area < calculatorData.AREA_LIMITS.min || area > calculatorData.AREA_LIMITS.max) {
     return {
@@ -197,12 +200,19 @@ export function calculateSipCost(params) {
     params.thirdFloorType || 'Полноценный',
     floors
   );
-  const firstFloorHeightAddition = getFloorHeightAddition(params.firstFloorHeight);
-  const secondFloorHeightAddition = params.secondFloorHeight
-    ? getFloorHeightAddition(params.secondFloorHeight)
+  // Для обычного режима: если высота не указана, используем дефолт 2.5 (как в форме)
+  const effectiveFirstFloorHeight = params.firstFloorHeight || 2.5;
+  const effectiveSecondFloorHeight = params.secondFloorHeight || 
+    (floors === '2 этажа' || floors === '3 этажа' ? 2.5 : undefined);
+  const effectiveThirdFloorHeight = params.thirdFloorHeight || 
+    (floors === '3 этажа' ? 2.5 : undefined);
+  
+  const firstFloorHeightAddition = getFloorHeightAddition(effectiveFirstFloorHeight);
+  const secondFloorHeightAddition = effectiveSecondFloorHeight
+    ? getFloorHeightAddition(effectiveSecondFloorHeight)
     : 0;
-  const thirdFloorHeightAddition = params.thirdFloorHeight
-    ? getFloorHeightAddition(params.thirdFloorHeight)
+  const thirdFloorHeightAddition = effectiveThirdFloorHeight
+    ? getFloorHeightAddition(effectiveThirdFloorHeight)
     : 0;
   const firstFloorThicknessAddition = getWallThicknessAddition(
     params.firstFloorThickness || 163
@@ -215,7 +225,7 @@ export function calculateSipCost(params) {
     : 0;
   const partitionAddition = getPartitionAddition(
     params.partitionType || 'Профиль + гипсокартон + мин. вата, толщина 100 мм',
-    params.firstFloorHeight
+    effectiveFirstFloorHeight
   );
   const ceilingAddition = getCeilingAddition(
     params.ceiling || 'Потолок утеплённый (пенополистирол 145 мм)'
@@ -284,7 +294,7 @@ export function calculateSipCost(params) {
   // Применяем глобальный коэффициент наценки
   const priceMultiplier = GLOBAL_PRICE_MULTIPLIER || 1.0;
 
-  return {
+  const baseResult = {
     total: Math.round(total * priceMultiplier),
     pricePerM2: Math.round(pricePerSqm * priceMultiplier),
     foundation: Math.round(fundamentCost * priceMultiplier),
@@ -292,5 +302,30 @@ export function calculateSipCost(params) {
     assembly: Math.round(assemblyCost * priceMultiplier),
     deliveryCost: Math.round(deliveryCost * priceMultiplier)
   };
+  
+  // Применяем НДС и рассрочку (как в обычном калькуляторе)
+  let finalTotal = baseResult.total;
+  
+  if (params.hasVat) {
+    finalTotal += finalTotal * 0.16;
+  }
+  
+  if (params.hasInstallment) {
+    if (params.installmentAmount && params.installmentAmount > 0) {
+      finalTotal += params.installmentAmount * 0.17;
+    } else {
+      finalTotal += finalTotal * 0.17;
+    }
+  }
+  
+  const result = {
+    ...baseResult,
+    total: Math.round(finalTotal)
+  };
+  
+  // Логирование для отладки
+  console.log('[AI_CALC_RESULT]', JSON.stringify(result, null, 2));
+  
+  return result;
 }
 

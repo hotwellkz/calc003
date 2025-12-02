@@ -24,15 +24,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Автопрокрутка к последнему сообщению
+  // Автопрокрутка к последнему сообщению (только внутри контейнера чата)
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current && messagesEndRef.current) {
+      // Скроллим только контейнер чата, а не всю страницу
+      // Используем scrollTop для прокрутки контейнера напрямую
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, loading]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -47,6 +55,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
     setInput('');
     setLoading(true);
     setError(null);
+    
+    // Возвращаем фокус в поле ввода после очистки
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/ai/calculator-chat`, {
@@ -83,14 +96,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
       }]);
     } finally {
       setLoading(false);
+      // Возвращаем фокус после получения ответа
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+      e.preventDefault(); // Предотвращаем стандартное поведение формы
       handleSend();
     }
+    // Shift+Enter обрабатывается браузером автоматически (новая строка)
   };
 
   const formatMessage = (content: string) => {
@@ -120,7 +138,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
       <div
         ref={chatContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4"
-        style={{ maxHeight: 'calc(600px - 140px)' }}
+        style={{ 
+          maxHeight: 'calc(600px - 140px)',
+          overflowY: 'auto',
+          scrollBehavior: 'smooth'
+        }}
       >
         {messages.map((message, index) => (
           <div
@@ -182,9 +204,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex gap-2">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             placeholder="Опишите дом, который вы хотите построить..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
             rows={2}

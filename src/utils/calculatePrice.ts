@@ -148,6 +148,9 @@ export const calculatePrice = (params: CalculatorInput): CalculationResult => {
   const { area } = params;
   const config = getConfigSync();
   
+  // Логирование для отладки
+  console.log('[FORM_CALC_INPUT]', JSON.stringify(params, null, 2));
+  
   // Проверка ограничений площади
   if (area < config.AREA_LIMITS.min || area > config.AREA_LIMITS.max) {
     return {
@@ -218,7 +221,7 @@ export const calculatePrice = (params: CalculatorInput): CalculationResult => {
   // Применяем глобальный коэффициент наценки ко всем итоговым значениям
   const priceMultiplier = config.GLOBAL_PRICE_MULTIPLIER || 1.0;
 
-  return {
+  const result = {
     fundamentCost: Math.round(fundamentCost * priceMultiplier),
     kitCost: Math.round(kitCost * priceMultiplier),
     assemblyCost: Math.round(assemblyCost * priceMultiplier),
@@ -226,5 +229,10 @@ export const calculatePrice = (params: CalculatorInput): CalculationResult => {
     pricePerSqm: Math.round(pricePerSqm * priceMultiplier),
     deliveryCost: Math.round(deliveryCost * priceMultiplier)
   };
+  
+  // Логирование для отладки
+  console.log('[FORM_CALC_RESULT]', JSON.stringify(result, null, 2));
+  
+  return result;
 };
 
