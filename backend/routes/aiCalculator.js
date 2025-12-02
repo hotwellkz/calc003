@@ -34,11 +34,13 @@ const SYSTEM_MESSAGE = {
 
 ЧИСЛА И РАСЧЁТЫ (КРИТИЧЕСКИ ВАЖНО - ИСПОЛНЯЙ СТРОГО):
 - ВСЕ цифры (стоимость фундамента, домокомплекта, сборки, доставки, итоговая цена, цена за м²) ты ОБЯЗАН использовать СТРОГО из переданного объекта результата (tool result).
+- В tool result есть поля total, pricePerM2, foundation, houseKit, assembly, deliveryCost — это уже отформатированные числа с пробелами.
 - НЕЛЬЗЯ ничего пересчитывать, изменять, округлять, делить или умножать.
 - НЕЛЬЗЯ придумывать числа сам, НЕЛЬЗЯ оценивать «примерно».
-- Просто красиво оформи эти значения в текст для клиента.
-- Форматируй цифры с пробелами: 8 426 300 ₸ (но сами числа бери из результата как есть, без изменений).
-- Если в tool result есть JSON с полями total, foundation, houseKit, assembly, deliveryCost, pricePerM2 — используй эти числа ТОЧНО как есть, без малейших изменений.`
+- НЕЛЬЗЯ пересчитывать total из pricePerM2 * area — используй готовое значение total из результата.
+- Просто используй готовые отформатированные значения из полей total, pricePerM2, foundation, houseKit, assembly, deliveryCost.
+- Если в tool result есть поле _instruction — следуй ему строго.
+- Пример: если в результате total = "9 091 170", то в тексте напиши именно "9 091 170 ₸", без изменений.`
 };
 
 /**
@@ -155,6 +157,28 @@ router.post('/ai/calculator-chat', async (req, res) => {
         
         // Вызываем функцию расчёта
         const result = calculateSipCost(normalizedArgs);
+        
+        // Логирование для отладки
+        console.log('[AI_RESULT]', JSON.stringify(result, null, 2));
+        
+        // Форматируем числа для передачи в AI (чтобы модель видела уже отформатированные значения)
+        const formattedResult = {
+          total: new Intl.NumberFormat('ru-RU').format(result.total),
+          pricePerM2: new Intl.NumberFormat('ru-RU').format(result.pricePerM2),
+          foundation: new Intl.NumberFormat('ru-RU').format(result.foundation),
+          houseKit: new Intl.NumberFormat('ru-RU').format(result.houseKit),
+          assembly: new Intl.NumberFormat('ru-RU').format(result.assembly),
+          deliveryCost: new Intl.NumberFormat('ru-RU').format(result.deliveryCost || 0),
+          // Также передаём исходные числа для точности
+          _raw: {
+            total: result.total,
+            pricePerM2: result.pricePerM2,
+            foundation: result.foundation,
+            houseKit: result.houseKit,
+            assembly: result.assembly,
+            deliveryCost: result.deliveryCost || 0
+          }
+        };
 
         // Второй запрос к OpenAI: отдать результат функции и получить красивый ответ для пользователя
         const followupResponse = await client.chat.completions.create({
@@ -166,7 +190,10 @@ router.post('/ai/calculator-chat', async (req, res) => {
               role: 'tool',
               tool_call_id: toolCall.id,
               name: toolCall.function.name,
-              content: JSON.stringify(result)
+              content: JSON.stringify({
+                ...formattedResult,
+                _instruction: 'Используй ТОЛЬКО эти числа. Не пересчитывай, не изменяй, не округляй. Форматированные значения уже готовы для отображения.'
+              }, null, 2)
             }
           ],
           temperature: 0.4

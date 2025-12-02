@@ -79,6 +79,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
 
       const data = await response.json();
       
+      // Логирование для отладки
+      console.log('[AI_RESPONSE]', data.content);
+      
       // Добавляем ответ ассистента
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -111,11 +114,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
     // Shift+Enter обрабатывается браузером автоматически (новая строка)
   };
 
+  // Правильное форматирование чисел без потери разрядов
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('ru-RU').format(Math.round(value)) + ' ₸';
+  };
+
   const formatMessage = (content: string) => {
-    // Простое форматирование: заменяем числа на форматированные
-    return content.replace(/(\d+)(\s*₸)?/g, (match, num) => {
-      const formatted = parseInt(num).toLocaleString('ru-RU');
-      return formatted + (match.includes('₸') ? ' ₸' : '');
+    // Улучшенное форматирование: находим числа в тексте и правильно форматируем их
+    // Обрабатываем как уже отформатированные числа (с пробелами), так и обычные
+    return content.replace(/(\d[\d\s]*\d|\d)(\s*₸)?/g, (match, numStr, currency) => {
+      // Убираем все пробелы из числа для парсинга
+      const cleanNum = numStr.replace(/\s/g, '');
+      const num = parseInt(cleanNum, 10);
+      
+      // Проверяем, что это валидное число и не слишком маленькое (чтобы не форматировать номера телефонов и т.п.)
+      if (isNaN(num) || num < 100) return match;
+      
+      // Форматируем с пробелами как разделителями тысяч (ru-RU использует пробелы)
+      const formatted = new Intl.NumberFormat('ru-RU', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(num);
+      
+      return formatted + (currency ? ' ₸' : '');
     });
   };
 
